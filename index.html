@@ -580,7 +580,9 @@ const Library = {
       this.render();
     } catch (e) {
       console.error(e);
-      grid.innerHTML = `<div class="empty"><p style="color:var(--accent)">Error: ${e.message}</p><button onclick="Library.load()" style="margin-top:1rem;padding:0.5rem 1rem;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer">Retry</button></div>`; },
+      grid.innerHTML = `<div class="empty"><p style="color:var(--accent)">Error: ${e.message}</p><button onclick="Library.load()" style="margin-top:1rem;padding:0.5rem 1rem;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer">Retry</button></div>`;
+    }
+  },
 
   render() {
     const grid = document.getElementById('books-grid');
