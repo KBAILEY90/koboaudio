@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KoboAudio">
+  <link rel="manifest" href="manifest.json">
+  <title>KoboAudio</title>
+  <style>
+    /* âââ Reset & Variables âââ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f0f1a;
+      --surface:  #1a1a2e;
+      --card:     #16213e;
+      --accent:   #e94560;
+      --accent2:  #0f3460;
+      --text:     #eaeaea;
+      --text-dim: #888;
+      --radius:   12px;
+      --safe-b:   env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* âââ Views âââ */
+    .view { display: none; height: 100vh; flex-direction: column; overflow: hidden; }
+    .view.active { display: flex; }
+
+    /* âââ Sign-in âââ */
+    #signin-view {
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      background: radial-gradient(ellipse at top, #1a1a3e 0%, var(--bg) 70%);
+    }
+    .app-icon {
+      width: 90px; height: 90px;
+      background: linear-gradient(135deg, var(--accent), #7b2d8b);
+      border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.8rem;
+      margin: 0 auto 1.5rem;
+      box-shadow: 0 8px 32px rgba(233,69,96,0.4);
+    }
+    .app-name { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; }
+    .app-tagline { color: var(--text-dim); margin: 0.4rem 0 2.5rem; font-size: 1rem; }
+
+    .signin-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      width: 100%; max-width: 320px;
+      padding: 1rem 1.5rem;
+      background: white; color: #333;
+      border: none; border-radius: var(--radius);
+      font-size: 1rem; font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .signin-btn:active { transform: scale(0.97); }
+    .signin-note { margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; }
+
+    /* Config warning */
+    .config-warn {
+      background: var(--accent);
+      color: white;
+      padding: 0.6rem 1rem;
+      font-size: 0.8rem;
+      text-align: center;
+      display: none;
+    }
+    .config-warn.show { display: block; }
+
+    /* âââ Library âââ */
+    #library-view { background: var(--bg); }
+
+    .lib-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 1rem;
+      background: var(--surface);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .lib-header h2 { font-size: 1.25rem; font-weight: 700; }
+
+    .header-actions { display: flex; gap: 0.25rem; }
+
+    .icon-btn {
+      background: none; border: none;
+      color: var(--text); cursor: pointer;
+      padding: 0.5rem; border-radius: 8px;
+      font-size: 1.2rem; line-height: 1;
+      transition: background 0.15s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.08); }
+
+    .books-grid {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 1rem;
+      align-content: start;
+    }
+
+    .book-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+    .book-card:active { transform: scale(0.96); }
+
+    .book-cover {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      background: linear-gradient(135deg, var(--accent2), #0a1628);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.8rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .book-cover img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .book-progress-bar {
+      position: absolute; bottom: 0; left: 0;
+      height: 3px; background: var(--accent);
+      transition: width 0.3s;
+    }
+    .book-info { padding: 0.6rem; }
+    .book-title {
+      font-size: 0.78rem; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+    .book-meta { font-size: 0.68rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+    /* âââ Loading / Empty âââ */
+    .loading, .empty {
+      grid-column: 1 / -1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem; min-height: 200px;
+      text-align: center; color: var(--text-dim);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* âââ Reader âââ */
+    #reader-view { background: #fff; }
+
+    .reader-header {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 0.75rem;
+      background: var(--surface);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .reader-title {
+      flex: 1; font-size: 0.85rem; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    #viewer {
+      flex: 1;
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Reader loading overlay */
+    #reader-loading {
+      position: absolute; inset: 0;
+      background: #fff;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem; color: #666; z-index: 10;
+    }
+    #reader-loading .spinner { border-top-color: var(--accent); }
+    #reader-loading.hidden { display: none; }
+
+    /* âââ TTS Controls âââ */
+    .tts-panel {
+      background: var(--surface);
+      border-top: 1px solid rgba(255,255,255,0.05);
+      padding: 0.75rem 1rem calc(0.75rem + var(--safe-b));
+      flex-shrink: 0;
+    }
+
+    .tts-row1 {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .ctrl-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%; border: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .ctrl-btn:active { transform: scale(0.9); }
+    .ctrl-btn.nav { background: rgba(255,255,255,0.1); color: var(--text); }
+    .ctrl-btn.play {
+      width: 50px; height: 50px; font-size: 1.3rem;
+      background: var(--accent); color: white;
+      box-shadow: 0 4px 12px rgba(233,69,96,0.4);
+    }
+
+    .tts-info { flex: 1; min-width: 0; }
+    .tts-chapter { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tts-prog-track { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .tts-prog-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s linear; }
+
+    .tts-row2 {
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .speed-group { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+    .speed-label { font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; min-width: 52px; }
+
+    input[type="range"] {
+      flex: 1; height: 4px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .pill-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--text);
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .pill-btn:hover { background: rgba(255,255,255,0.08); }
+
+    /* âââ Modals âââ */
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      align-items: flex-end;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal-sheet {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 1.25rem 1rem calc(1.25rem + var(--safe-b));
+      width: 100%;
+      max-height: 70vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin: 0 auto 1rem;
+    }
+    .modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+
+    /* Voice list */
+    .voice-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem; background: var(--card);
+      border-radius: 10px; cursor: pointer;
+      margin-bottom: 0.5rem;
+      border: 2px solid transparent;
+      transition: border-color 0.15s;
+    }
+    .voice-item.active { border-color: var(--accent); }
+    .voice-name { font-size: 0.9rem; font-weight: 600; }
+    .voice-lang { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.1rem; }
+    .voice-check { color: var(--accent); font-size: 1.1rem; }
+
+    /* Chapter list */
+    .chapter-item {
+      display: flex; align-items: center;
+      padding: 0.75rem; background: var(--card);
+      border-radius: 10px; cursor: pointer;
+      margin-bottom: 0.5rem;
+      border-left: 3px solid transparent;
+      transition: border-color 0.15s;
+    }
+    .chapter-item.active { border-left-color: var(--accent); }
+    .chapter-num { font-size: 0.72rem; color: var(--text-dim); min-width: 28px; }
+    .chapter-label { font-size: 0.88rem; font-weight: 500; flex: 1; }
+
+    /* âââ Toast âââ */
+    #toast {
+      position: fixed;
+      bottom: calc(130px + var(--safe-b));
+      left: 50%; transform: translateX(-50%);
+      background: rgba(10,10,20,0.92);
+      color: white;
+      padding: 0.6rem 1.2rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      z-index: 999;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+      white-space: nowrap;
+      backdrop-filter: blur(8px);
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ââââââââââââââ SIGN-IN VIEW ââââââââââââââ -->
+<div id="signin-view" class="view active">
+  <div class="config-warn" id="config-warn">
+    â ï¸ Set your Google Client ID in CONFIG at the top of this file before use.
+  </div>
+  <div style="padding: 3rem 2rem; display:flex; flex-direction:column; align-items:center;">
+    <div class="app-icon">ð§</div>
+    <div class="app-name">KoboAudio</div>
+    <div class="app-tagline">Your Kobo library, read aloud</div>
+    <button class="signin-btn" onclick="App.signIn()">
+      <svg width="20" height="20" viewBox="0 0 24 24">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Sign in with Google
+    </button>
+    <p class="signin-note">
+      Connects to your Google Drive "Rakuten Kobo" folder.<br>
+      Only reads your epub files â never modifies anything.
+    </p>
+  </div>
+</div>
+
+<!-- ââââââââââââââ LIBRARY VIEW ââââââââââââââ -->
+<div id="library-view" class="view">
+  <div class="lib-header">
+    <h2>ð My Library</h2>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="Library.refresh()" title="Refresh">âº</button>
+      <button class="icon-btn" onclick="App.signOut()" title="Sign out">â</button>
+    </div>
+  </div>
+  <div class="books-grid" id="books-grid">
+    <div class="loading"><div class="spinner"></div><span>Loading your libraryâ¦</span></div>
+  </div>
+</div>
+
+<!-- ââââââââââââââ READER VIEW ââââââââââââââ -->
+<div id="reader-view" class="view">
+  <div class="reader-header">
+    <button class="icon-btn" onclick="Reader.close()" style="color:var(--text)">â</button>
+    <span class="reader-title" id="reader-title">Loadingâ¦</span>
+    <button class="icon-btn" onclick="ChapterModal.open()" title="Chapters">â°</button>
+  </div>
+
+  <div id="viewer">
+    <div id="reader-loading">
+      <div class="spinner"></div>
+      <span style="color:#999;font-size:0.9rem">Loading bookâ¦</span>
+    </div>
+  </div>
+
+  <div class="tts-panel">
+    <div class="tts-row1">
+      <button class="ctrl-btn nav" onclick="Reader.prev()" title="Previous page">ââ</button>
+      <button class="ctrl-btn play" id="play-btn" onclick="TTS.toggle()">â¶</button>
+      <button class="ctrl-btn nav" onclick="Reader.next()" title="Next page">â¶â¶</button>
+      <div class="tts-info">
+        <div class="tts-chapter" id="tts-chapter">â</div>
+        <div class="tts-prog-track"><div class="tts-prog-fill" id="tts-prog" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="tts-row2">
+      <div class="speed-group">
+        <span class="speed-label">Speed: <strong id="speed-val">1.0Ã</strong></span>
+        <input type="range" id="speed-range" min="0.5" max="3.5" step="0.1" value="1" oninput="TTS.setRate(+this.value)">
+      </div>
+      <button class="pill-btn" onclick="VoiceModal.open()">ð£ Voice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ââââââââââââââ VOICE MODAL ââââââââââââââ -->
+<div class="modal-backdrop" id="voice-modal" onclick="VoiceModal.close(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Choose Voice</div>
+    <div id="voice-list"></div>
+  </div>
+</div>
+
+<!-- ââââââââââââââ CHAPTER MODAL ââââââââââââââ -->
+<div class="modal-backdrop" id="chapter-modal" onclick="ChapterModal.close(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Chapters</div>
+    <div id="chapter-list"></div>
+  </div>
+</div>
+
+<!-- ââââââââââââââ TOAST ââââââââââââââ -->
+<div id="toast"></div>
+
+<!-- ââââââââââââââ SCRIPTS ââââââââââââââ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js" crossorigin="anonymous"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// â  CONFIGURATION â replace with your own Client ID    â
+// â  See SETUP instructions in SETUP.md                 â
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const CONFIG = {
+  CLIENT_ID:   '871446308528-r12mb3i1r87jrk681ms3bp55msubojt7.apps.googleusercontent.com',
+  FOLDER_NAME: 'Rakuten Kobo',
+  SCOPE:       'https://www.googleapis.com/auth/drive.readonly',
+};
+
+// âââ State âââââââââââââââââââââââââââââââââââââââââââââââ
+const State = {
+  token:       null,
+  books:       [],
+  currentBook: null,
+  rendition:   null,
+  epubBook:    null,
+  toc:         [],
+  progress:    JSON.parse(localStorage.getItem('kba_prog') || '{}'),
+  saveProgress() { localStorage.setItem('kba_prog', JSON.stringify(this.progress)); },
+};
+
+// âââ Utilities âââââââââââââââââââââââââââââââââââââââââââ
+let _toastTimer;
+function toast(msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  if (dur > 0) _toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+}
+function hideToast() { document.getElementById('toast').classList.remove('show'); }
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id + '-view').classList.add('active');
+}
+
+function fmtSize(b) {
+  if (!b) return '';
+  return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+}
+
+// âââ Auth âââââââââââââââââââââââââââââââââââââââââââââââââ
+const App = {
+  _client: null,
+
+  init() {
+    if (CONFIG.CLIENT_ID === '871446308528-r12mb3i1r87jrk681ms3bp55msubojt7.apps.googleusercontent.com') {
+      document.getElementById('config-warn').classList.add('show');
+    }
+    // Wait for GIS
+    const poll = setInterval(() => {
+      if (window.google?.accounts?.oauth2) {
+        clearInterval(poll);
+        this._client = google.accounts.oauth2.initTokenClient({
+          client_id: CONFIG.CLIENT_ID,
+          scope: CONFIG.SCOPE,
+          callback: r => this._onToken(r),
+        });
+      }
+    }, 150);
+  },
+
+  signIn() {
+    if (CONFIG.CLIENT_ID === '871446308528-r12mb3i1r87jrk681ms3bp55msubojt7.apps.googleusercontent.com') {
+      alert('Please set your Google Client ID in the CONFIG section of index.html first.\nSee SETUP.md for instructions.');
+      return;
+    }
+    if (!this._client) { toast('Auth loading, please waitâ¦'); return; }
+    this._client.requestAccessToken({ prompt: '' });
+  },
+
+  _onToken(r) {
+    if (r.error) { toast('Sign-in failed: ' + r.error); return; }
+    State.token = r.access_token;
+    showView('library');
+    Library.load();
+  },
+
+  signOut() {
+    if (State.token) google.accounts.oauth2.revoke(State.token, () => {});
+    State.token = null;
+    TTS.stop();
+    showView('signin');
+  },
+};
+
+// âââ Drive API âââââââââââââââââââââââââââââââââââââââââââ
+const Drive = {
+  async get(path, params = {}) {
+    const url = new URL('https://www.googleapis.com/drive/v3/' + path);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + State.token } });
+    if (!r.ok) throw new Error(`Drive ${r.status}: ${await r.text()}`);
+    return r.json();
+  },
+
+  async findFolder(name) {
+    const d = await this.get('files', {
+      q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+    });
+    return d.files[0]?.id ?? null;
+  },
+
+  async listEpubs(folderId) {
+    const d = await this.get('files', {
+      q: `'${folderId}' in parents and trashed=false and (mimeType='application/epub+zip' or name contains '.epub')`,
+      fields: 'files(id,name,thumbnailLink,size)',
+      pageSize: '200',
+      orderBy: 'name',
+    });
+    return d.files;
+  },
+
+  async download(fileId) {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + State.token },
+    });
+    if (!r.ok) throw new Error(`Download failed: ${r.status}`);
+    return r.arrayBuffer();
+  },
+};
+
+// âââ Library âââââââââââââââââââââââââââââââââââââââââââââ
+const Library = {
+  async load() {
+    const grid = document.getElementById('books-grid');
+    grid.innerHTML = '<div class="loading"><div class="spinner"></div><span>Finding your booksâ¦</span></div>';
+    try {
+      const fid = await Drive.findFolder(CONFIG.FOLDER_NAME);
+      if (!fid) {
+        grid.innerHTML = `<div class="empty"><p>Could not find a folder named<br><strong>"${CONFIG.FOLDER_NAME}"</strong><br>in your Google Drive.</p></div>`;
+        return;
+      }
+      State.books = await Drive.listEpubs(fid);
+      if (!State.books.length) {
+        grid.innerHTML = `<div class="empty"><p>No epub files found in<br><strong>"${CONFIG.FOLDER_NAME}"</strong>.</p></div>`;
+        return;
+      }
+      this.render();
+    } catch (e) {
+      console.error(e);
+      grid.innerHTML = `<div class="empty"><p style="color:var(--accent)">Error: ${e.message}</p><button onclick="Library.load()" style="margin-top:1rem;padding:0.5rem 1rem;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer">Retry</button></div>`;
+    }
+  },
+
+  render() {
+    const grid = document.getElementById('books-grid');
+    grid.innerHTML = State.books.map((b, i) => {
+      const title = b.name.replace(/\.epub$/i, '');
+      const prog  = State.progress[b.id];
+      const pct   = prog?.pct ?? 0;
+      return `
+        <div class="book-card" onclick="Reader.open(${i})">
+          <div class="book-cover">
+            ${b.thumbnailLink
+              ? `<img src="${b.thumbnailLink.replace('s220', 's400')}" alt="" loading="lazy">`
+              : 'ð'}
+            ${pct > 0 ? `<div class="book-progress-bar" style="width:${pct}%"></div>` : ''}
+          </div>
+          <div class="book-info">
+            <div class="book-title" title="${title}">${title}</div>
+            ${b.size ? `<div class="book-meta">${fmtSize(b.size)}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  refresh() { this.load(); },
+};
+
+// âââ Reader ââââââââââââââââââââââââââââââââââââââââââââââ
+const Reader = {
+  async open(index) {
+    const book = State.books[index];
+    State.currentBook = book;
+    showView('reader');
+    document.getElementById('reader-title').textContent = book.name.replace(/\.epub$/i, '');
+    document.getElementById('reader-loading').classList.remove('hidden');
+    document.getElementById('tts-chapter').textContent = 'â';
+    document.getElementById('tts-prog').style.width = '0%';
+    TTS.stop();
+
+    try {
+      toast('Downloadingâ¦', 0);
+      const buf = await Drive.download(book.id);
+      hideToast();
+
+      // Destroy previous
+      if (State.epubBook) { State.epubBook.destroy(); State.epubBook = null; }
+
+      State.epubBook = ePub(buf);
+      await State.epubBook.ready;
+
+      // Capture TOC
+      State.toc = State.epubBook.navigation?.toc ?? [];
+
+      State.rendition = State.epubBook.renderTo('viewer', {
+        width: '100%',
+        height: '100%',
+        flow: 'paginated',
+        spread: 'none',
+        allowScriptedContent: false,
+      });
+
+      // Restore or start from beginning
+      const saved = State.progress[book.id];
+      await State.rendition.display(saved?.cfi || undefined);
+
+      document.getElementById('reader-loading').classList.add('hidden');
+
+      // Generate locations for % tracking (async, non-blocking)
+      State.epubBook.locations.generate(1024).catch(() => {});
+
+      // On each page turn
+      State.rendition.on('relocated', loc => {
+        this._onRelocated(loc, book.id);
+      });
+
+      // Swipe gestures
+      this._addSwipe();
+
+      // Keyboard nav inside iframe
+      State.rendition.on('keydown', e => {
+        if (e.key === 'ArrowRight') this.next();
+        if (e.key === 'ArrowLeft')  this.prev();
+      });
+
+    } catch (e) {
+      console.error(e);
+      document.getElementById('reader-loading').classList.add('hidden');
+      document.getElementById('viewer').innerHTML =
+        `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:2rem;text-align:center;color:var(--accent);background:#fff"><p>Failed to load book:<br>${e.message}</p></div>`;
+    }
+  },
+
+  _onRelocated(loc, bookId) {
+    // Update chapter label
+    const href = loc.start.href;
+    const tocItem = State.toc.find(t => href.includes(t.href?.split('#')[0]));
+    document.getElementById('tts-chapter').textContent = tocItem?.label?.trim() || `Section ${loc.start.index + 1}`;
+
+    // Update progress %
+    let pct = 0;
+    try {
+      pct = Math.round(State.epubBook.locations.percentageFromCfi(loc.start.cfi) * 100);
+    } catch(_) {}
+    document.getElementById('tts-prog').style.width = pct + '%';
+
+    // Persist
+    State.progress[bookId] = { cfi: loc.start.cfi, pct };
+    State.saveProgress();
+
+    // Feed current page text to TTS
+    TTS.loadPageText();
+  },
+
+  _addSwipe() {
+    const el = document.getElementById('viewer');
+    let sx = 0;
+    el.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
+    el.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - sx;
+      if (Math.abs(dx) > 45) { dx < 0 ? this.next() : this.prev(); }
+    }, { passive: true });
+  },
+
+  next() { TTS.stop(); State.rendition?.next(); },
+  prev() { TTS.stop(); State.rendition?.prev(); },
+
+  close() {
+    TTS.stop();
+    showView('library');
+    Library.render(); // refresh progress indicators
+  },
+};
+
+// âââ TTS âââââââââââââââââââââââââââââââââââââââââââââââââ
+const TTS = {
+  chunks: [],
+  idx:    0,
+  active: false,
+  rate:   1.0,
+  voice:  null,
+
+  loadPageText() {
+    try {
+      const iframes = document.getElementById('viewer').querySelectorAll('iframe');
+      let text = '';
+      iframes.forEach(f => { text += (f.contentDocument?.body?.innerText || '') + ' '; });
+      this.chunks = this._split(text.trim());
+      this.idx = 0;
+    } catch(e) { this.chunks = []; }
+  },
+
+  _split(text) {
+    if (!text) return [];
+    // Split into sentence-sized chunks â¤ 220 chars
+    const sentences = text.match(/[^.!?â¦\n]+[.!?â¦\n]+/g) || [text];
+    const out = []; let cur = '';
+    for (const s of sentences) {
+      if ((cur + s).length > 220 && cur) { out.push(cur.trim()); cur = s; }
+      else cur += ' ' + s;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out.filter(c => c.length > 3);
+  },
+
+  toggle() {
+    this.active ? this.stop() : this.start();
+  },
+
+  start() {
+    if (!this.chunks.length) {
+      this.loadPageText();
+      if (!this.chunks.length) { toast('No text found to read'); return; }
+    }
+    this.active = true;
+    document.getElementById('play-btn').textContent = 'â¸';
+    this._speak();
+  },
+
+  stop() {
+    this.active = false;
+    window.speechSynthesis?.cancel();
+    const btn = document.getElementById('play-btn');
+    if (btn) btn.textContent = 'â¶';
+  },
+
+  _speak() {
+    if (!this.active) return;
+    if (this.idx >= this.chunks.length) {
+      // Auto-advance to next page
+      setTimeout(() => {
+        if (this.active) {
+          Reader.next();
+          setTimeout(() => { if (this.active && this.chunks.length) this._speak(); }, 900);
+        }
+      }, 400);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(this.chunks[this.idx]);
+    u.rate  = this.rate;
+    u.voice = this.voice;
+    u.onend   = () => { this.idx++; if (this.active) this._speak(); };
+    u.onerror = e => { if (e.error !== 'interrupted') console.warn('TTS:', e.error); };
+    window.speechSynthesis.speak(u);
+
+    // iOS workaround: resume if paused
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+  },
+
+  setRate(v) {
+    this.rate = v;
+    document.getElementById('speed-val').textContent = v.toFixed(1) + 'Ã';
+    if (this.active) { window.speechSynthesis.cancel(); this._speak(); }
+  },
+
+  allVoices() {
+    const all = window.speechSynthesis.getVoices();
+    const en  = all.filter(v => v.lang.startsWith('en'));
+    return en.length ? en : all;
+  },
+};
+
+// iOS: voices load async
+window.speechSynthesis?.addEventListener('voiceschanged', () => {});
+
+// âââ Voice Modal ââââââââââââââââââââââââââââââââââââââââââ
+const VoiceModal = {
+  open() {
+    const voices = TTS.allVoices();
+    document.getElementById('voice-list').innerHTML = voices.map((v, i) => `
+      <div class="voice-item ${TTS.voice?.name === v.name ? 'active' : ''}" onclick="VoiceModal.select(${i})">
+        <div>
+          <div class="voice-name">${v.name}</div>
+          <div class="voice-lang">${v.lang}${v.localService ? ' Â· Local' : ''}</div>
+        </div>
+        ${TTS.voice?.name === v.name ? '<span class="voice-check">â</span>' : ''}
+      </div>`).join('');
+    document.getElementById('voice-modal').classList.add('open');
+  },
+
+  select(i) {
+    TTS.voice = TTS.allVoices()[i];
+    toast('Voice: ' + TTS.voice.name);
+    this.close();
+    if (TTS.active) { window.speechSynthesis.cancel(); TTS._speak(); }
+  },
+
+  close(e) {
+    if (!e || e.target.classList.contains('modal-backdrop'))
+      document.getElementById('voice-modal').classList.remove('open');
+  },
+};
+
+// âââ Chapter Modal ââââââââââââââââââââââââââââââââââââââââ
+const ChapterModal = {
+  open() {
+    if (!State.toc.length) { toast('No chapter list available'); return; }
+    document.getElementById('chapter-list').innerHTML = State.toc.map((c, i) => `
+      <div class="chapter-item" onclick="ChapterModal.jump('${c.href}')">
+        <span class="chapter-num">${i + 1}</span>
+        <span class="chapter-label">${c.label?.trim() || 'Chapter ' + (i + 1)}</span>
+      </div>`).join('');
+    document.getElementById('chapter-modal').classList.add('open');
+  },
+
+  jump(href) {
+    TTS.stop();
+    this.close();
+    State.rendition?.display(href).catch(console.error);
+  },
+
+  close(e) {
+    if (!e || e.target.classList.contains('modal-backdrop'))
+      document.getElementById('chapter-modal').classList.remove('open');
+  },
+};
+
+// âââ Boot âââââââââââââââââââââââââââââââââââââââââââââââââ
+window.addEventListener('load', () => App.init());
+
+</script>
+</body>
+</html>
